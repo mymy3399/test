@@ -142,7 +142,7 @@ async function navigate(page) {
   state.page = page;
   document.querySelectorAll("#sideNav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
   const content = document.getElementById("pageContent");
-  content.innerHTML = `<div class="empty-state">กำลังโหลด...</div>`;
+  content.innerHTML = `<div class="empty-state"><div class="spinner"></div>กำลังโหลด...</div>`;
   try {
     if (page === "dashboard") await renderDashboard();
     else if (page === "transactions") await renderTransactions();
@@ -152,6 +152,9 @@ async function navigate(page) {
   } catch (err) {
     content.innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: ${esc(err.message)}</div>`;
   }
+  content.classList.remove("page-fade");
+  void content.offsetWidth;
+  content.classList.add("page-fade");
 }
 
 function creditCardOptions(selectedId) {
@@ -161,11 +164,30 @@ function creditCardOptions(selectedId) {
 }
 
 // ================= Dashboard =================
+function renderCategoryBars(byCategory) {
+  const entries = Object.entries(byCategory || {}).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) return "";
+  const max = entries[0][1];
+  return `
+    <div class="panel">
+      <h3>รายจ่ายตามหมวดหมู่เดือนนี้</h3>
+      <div class="cat-bars">
+        ${entries.map(([category, amount]) => `
+          <div class="cat-bar-row">
+            <div class="cat-bar-label">${esc(category)}</div>
+            <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${max > 0 ? (amount / max) * 100 : 0}%"></div></div>
+            <div class="cat-bar-value">฿${fmtMoney(amount)}</div>
+          </div>`).join("")}
+      </div>
+    </div>`;
+}
+
 async function renderDashboard() {
   await api.recurringBills.generate();
-  const [summary, pendingInstances] = await Promise.all([
+  const [summary, pendingInstances, txnSummary] = await Promise.all([
     api.dashboard.summary(),
     api.recurringBills.instances("pending"),
+    api.transactions.summary(),
   ]);
 
   const content = document.getElementById("pageContent");
@@ -179,6 +201,8 @@ async function renderDashboard() {
       <div class="kpi-card"><div class="label">ยอดบัตรเครดิตเดือนนี้</div><div class="value">฿${fmtMoney(summary.credit_card_outstanding)}</div></div>
       <div class="kpi-card"><div class="label">ยอดลูกหนี้คงค้าง</div><div class="value">฿${fmtMoney(summary.loans_outstanding)}</div></div>
     </div>
+
+    ${renderCategoryBars(txnSummary.by_category)}
 
     ${pendingInstances.length ? `
     <div class="panel">
@@ -232,7 +256,7 @@ async function onDashboardClick(e) {
 }
 
 function renderTxnTable(txns, withActions = true) {
-  if (!txns.length) return `<div class="empty-state">ยังไม่มีรายการ</div>`;
+  if (!txns.length) return `<div class="empty-state"><span class="empty-icon">📭</span>ยังไม่มีรายการ</div>`;
   return `
     <table>
       <thead>
@@ -455,7 +479,7 @@ async function renderRecurring() {
               </td>
             </tr>`).join("")}
         </tbody>
-      </table>` : `<div class="empty-state">ยังไม่มีรายจ่ายประจำ</div>`}
+      </table>` : `<div class="empty-state"><span class="empty-icon">🔁</span>ยังไม่มีรายจ่ายประจำ</div>`}
     </div>
 
     ${history.length ? `
@@ -642,7 +666,7 @@ async function renderCreditCards() {
           </div>
         </div>`;
       }).join("")}
-    </div>` : `<div class="empty-state">ยังไม่มีบัตรเครดิต</div>`}
+    </div>` : `<div class="empty-state"><span class="empty-icon">💳</span>ยังไม่มีบัตรเครดิต</div>`}
   `;
 
   content.onclick = onCreditCardsClick;
@@ -763,7 +787,7 @@ async function renderLoans() {
 
     <div class="panel">
       <h3>กำลังค้างชำระ</h3>
-      ${activeLoans.length ? activeLoans.map(renderLoanCard).join("") : `<div class="empty-state">ไม่มีลูกหนี้ค้างชำระ</div>`}
+      ${activeLoans.length ? activeLoans.map(renderLoanCard).join("") : `<div class="empty-state"><span class="empty-icon">🤝</span>ไม่มีลูกหนี้ค้างชำระ</div>`}
     </div>
 
     ${completedLoans.length ? `
