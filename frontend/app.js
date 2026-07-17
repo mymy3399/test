@@ -188,9 +188,9 @@ async function renderDashboard() {
         <tbody>
           ${pendingInstances.map((i) => `
             <tr>
-              <td>${esc(i.bill_name)}</td>
-              <td>${fmtDate(i.due_date)}</td>
-              <td class="amount-expense">฿${fmtMoney(i.amount)}</td>
+              <td data-label="รายการ">${esc(i.bill_name)}</td>
+              <td data-label="ครบกำหนด">${fmtDate(i.due_date)}</td>
+              <td class="amount-expense" data-label="จำนวนเงิน">฿${fmtMoney(i.amount)}</td>
               <td class="actions-cell">
                 <button class="small primary" data-action="pay-instance" data-id="${i.id}">จ่ายแล้ว</button>
                 <button class="small ghost" data-action="skip-instance" data-id="${i.id}">ข้าม</button>
@@ -241,12 +241,12 @@ function renderTxnTable(txns, withActions = true) {
       <tbody>
         ${txns.map((t) => `
           <tr>
-            <td>${fmtDate(t.txn_date)}</td>
-            <td>${t.type === "income" ? "รายรับ" : "รายจ่าย"}</td>
-            <td>${esc(t.category)}</td>
-            <td>${esc(t.description) || "-"}</td>
-            <td>${esc(PAYMENT_METHOD_LABEL[t.payment_method] || t.payment_method)}</td>
-            <td class="${t.type === "income" ? "amount-income" : "amount-expense"}">${t.type === "income" ? "+" : "-"}฿${fmtMoney(t.amount)}</td>
+            <td data-label="วันที่">${fmtDate(t.txn_date)}</td>
+            <td data-label="ประเภท">${t.type === "income" ? "รายรับ" : "รายจ่าย"}</td>
+            <td data-label="หมวดหมู่">${esc(t.category)}</td>
+            <td data-label="รายละเอียด">${esc(t.description) || "-"}</td>
+            <td data-label="ช่องทาง">${esc(PAYMENT_METHOD_LABEL[t.payment_method] || t.payment_method)}</td>
+            <td class="${t.type === "income" ? "amount-income" : "amount-expense"}" data-label="จำนวนเงิน">${t.type === "income" ? "+" : "-"}฿${fmtMoney(t.amount)}</td>
             ${withActions ? `
             <td class="actions-cell">
               <button class="small" data-action="edit-txn" data-id="${t.id}">แก้ไข</button>
@@ -422,10 +422,10 @@ async function renderRecurring() {
         <tbody>
           ${pending.map((i) => `
             <tr>
-              <td>${esc(i.bill_name)}</td>
-              <td>${esc(i.period)}</td>
-              <td>${fmtDate(i.due_date)}</td>
-              <td class="amount-expense">฿${fmtMoney(i.amount)}</td>
+              <td data-label="รายการ">${esc(i.bill_name)}</td>
+              <td data-label="งวด">${esc(i.period)}</td>
+              <td data-label="ครบกำหนด">${fmtDate(i.due_date)}</td>
+              <td class="amount-expense" data-label="จำนวนเงิน">฿${fmtMoney(i.amount)}</td>
               <td class="actions-cell">
                 <button class="small primary" data-action="pay-instance" data-id="${i.id}">จ่ายแล้ว</button>
                 <button class="small ghost" data-action="skip-instance" data-id="${i.id}">ข้าม</button>
@@ -443,12 +443,12 @@ async function renderRecurring() {
         <tbody>
           ${bills.map((b) => `
             <tr>
-              <td>${esc(b.name)}</td>
-              <td>${esc(b.category)}</td>
-              <td>฿${fmtMoney(b.amount)}</td>
-              <td>${b.due_day}</td>
-              <td>${esc(PAYMENT_METHOD_LABEL[b.payment_method] || b.payment_method)}</td>
-              <td>${b.is_active ? "🟢 ใช้งาน" : "⚪ หยุดใช้งาน"}</td>
+              <td data-label="ชื่อ">${esc(b.name)}</td>
+              <td data-label="หมวดหมู่">${esc(b.category)}</td>
+              <td data-label="จำนวนเงิน">฿${fmtMoney(b.amount)}</td>
+              <td data-label="ทุกวันที่">${b.due_day}</td>
+              <td data-label="ช่องทาง">${esc(PAYMENT_METHOD_LABEL[b.payment_method] || b.payment_method)}</td>
+              <td data-label="สถานะ">${b.is_active ? "🟢 ใช้งาน" : "⚪ หยุดใช้งาน"}</td>
               <td class="actions-cell">
                 <button class="small" data-action="edit-bill" data-id="${b.id}">แก้ไข</button>
                 <button class="small danger" data-action="delete-bill" data-id="${b.id}">ลบ</button>
@@ -466,11 +466,11 @@ async function renderRecurring() {
         <tbody>
           ${history.map((i) => `
             <tr>
-              <td>${esc(i.bill_name)}</td>
-              <td>${esc(i.period)}</td>
-              <td>฿${fmtMoney(i.amount)}</td>
-              <td><span class="badge ${i.status}">${INSTANCE_STATUS_LABEL[i.status]}</span></td>
-              <td>${fmtDate(i.paid_date)}</td>
+              <td data-label="รายการ">${esc(i.bill_name)}</td>
+              <td data-label="งวด">${esc(i.period)}</td>
+              <td data-label="จำนวนเงิน">฿${fmtMoney(i.amount)}</td>
+              <td data-label="สถานะ"><span class="badge ${i.status}">${INSTANCE_STATUS_LABEL[i.status]}</span></td>
+              <td data-label="วันที่จ่าย">${fmtDate(i.paid_date)}</td>
             </tr>`).join("")}
         </tbody>
       </table>

@@ -33,20 +33,30 @@
   <aside class="sidebar">
     <div class="brand">เงินทอง 💰</div>
     <nav id="sideNav">
-      <button data-page="dashboard" class="active">📊 ภาพรวม</button>
-      <button data-page="transactions">📝 รายรับ-รายจ่าย</button>
-      <button data-page="recurring">🔁 รายจ่ายประจำ</button>
-      <button data-page="creditCards">💳 บัตรเครดิต</button>
-      <button data-page="loans">🤝 ยืมเงิน / ลูกหนี้</button>
+      <button data-page="dashboard" class="active">
+        <span class="nav-icon">📊</span><span class="nav-label">ภาพรวม</span>
+      </button>
+      <button data-page="transactions">
+        <span class="nav-icon">📝</span><span class="nav-label">รายรับ-รายจ่าย</span>
+      </button>
+      <button data-page="recurring">
+        <span class="nav-icon">🔁</span><span class="nav-label">รายจ่ายประจำ</span>
+      </button>
+      <button data-page="creditCards">
+        <span class="nav-icon">💳</span><span class="nav-label">บัตรเครดิต</span>
+      </button>
+      <button data-page="loans">
+        <span class="nav-icon">🤝</span><span class="nav-label">ยืมเงิน/ลูกหนี้</span>
+      </button>
     </nav>
     <div class="user-box">
       <div id="currentUserLabel">—</div>
-      <button id="themeToggleBtn" class="theme-toggle small">🌙 / ☀️ ธีม</button>
-      <button id="logoutBtn" class="small">ออกจากระบบ</button>
+      <button id="themeToggleBtn" class="theme-toggle small icon-btn" title="สลับธีม">🌙<span class="btn-label"> / ☀️ ธีม</span></button>
+      <button id="logoutBtn" class="small icon-btn" title="ออกจากระบบ">🚪<span class="btn-label"> ออกจากระบบ</span></button>
     </div>
   </aside>
 
-  <main class="main" id="pageContent"></main>
+  <main class="main"><div id="pageContent"></div></main>
 </div>
 
 <div id="toastHost"></div>
