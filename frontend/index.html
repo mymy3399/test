@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>เงินทอง — จดรายรับรายจ่าย</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💰</text></svg>" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>เงินทอง 💰</h1>
+    <p class="subtitle">ระบบจดรายรับ-รายจ่ายส่วนตัว</p>
+    <form id="loginForm">
+      <div class="field">
+        <label for="loginUsername">ชื่อผู้ใช้</label>
+        <input id="loginUsername" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="loginPassword">รหัสผ่าน</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" required />
+      </div>
+      <div class="form-error" id="loginError"></div>
+      <button type="submit" class="primary">เข้าสู่ระบบ</button>
+    </form>
+    <p class="login-hint">บัญชีทดลอง: demo / demo1234</p>
+  </div>
+</div>
+
+<div id="app">
+  <aside class="sidebar">
+    <div class="brand">เงินทอง 💰</div>
+    <nav id="sideNav">
+      <button data-page="dashboard" class="active">📊 ภาพรวม</button>
+      <button data-page="transactions">📝 รายรับ-รายจ่าย</button>
+      <button data-page="recurring">🔁 รายจ่ายประจำ</button>
+      <button data-page="creditCards">💳 บัตรเครดิต</button>
+      <button data-page="loans">🤝 ยืมเงิน / ลูกหนี้</button>
+    </nav>
+    <div class="user-box">
+      <div id="currentUserLabel">—</div>
+      <button id="themeToggleBtn" class="theme-toggle small">🌙 / ☀️ ธีม</button>
+      <button id="logoutBtn" class="small">ออกจากระบบ</button>
+    </div>
+  </aside>
+
+  <main class="main" id="pageContent"></main>
+</div>
+
+<div id="toastHost"></div>
+<div id="modalHost"></div>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
