@@ -77,6 +77,25 @@ const transactions = {
   update: (id, payload) => _call("PUT", `/transactions/${id}`, payload),
   remove: (id) => _call("DELETE", `/transactions/${id}`),
   summary: (period) => _call("GET", `/transactions/summary${qs({ period })}`),
+  trend: (months) => _call("GET", `/transactions/trend${qs({ months })}`),
+  async exportCsv(params = {}) {
+    const headers = {};
+    if (_token) headers["Authorization"] = `Bearer ${_token}`;
+    const resp = await fetch(`${API_BASE}/transactions/export/csv${qs(params)}`, { headers });
+    if (!resp.ok) throw new APIError("ส่งออกไฟล์ไม่สำเร็จ", resp.status);
+    const blob = await resp.blob();
+    const disposition = resp.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : "transactions.csv";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
 };
 
 const creditCards = {
@@ -111,6 +130,20 @@ const dashboard = {
   summary: () => _call("GET", "/dashboard/summary"),
 };
 
+const budgets = {
+  list: () => _call("GET", "/budgets"),
+  create: (payload) => _call("POST", "/budgets", payload),
+  update: (id, payload) => _call("PUT", `/budgets/${id}`, payload),
+  remove: (id) => _call("DELETE", `/budgets/${id}`),
+};
+
+const push = {
+  vapidPublicKey: () => _call("GET", "/push/vapid-public-key"),
+  subscribe: (subscription) => _call("POST", "/push/subscribe", subscription),
+  unsubscribe: (endpoint) => _call("POST", "/push/unsubscribe", { endpoint }),
+  test: () => _call("POST", "/push/test"),
+};
+
 function qs(params) {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "");
   if (!entries.length) return "";
@@ -133,6 +166,8 @@ window.api = {
   recurringBills,
   loans,
   dashboard,
+  budgets,
+  push,
   checkHealth,
   getToken,
   APIError,

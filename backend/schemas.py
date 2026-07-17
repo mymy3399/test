@@ -171,6 +171,38 @@ class LoanPaymentOut(BaseModel):
     notes: str
 
 
+# ---------- Push notifications ----------
+class PushSubscriptionKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str
+    keys: PushSubscriptionKeys
+
+
+# ---------- Budgets ----------
+class BudgetCreate(BaseModel):
+    category: str
+    monthly_limit: float
+
+
+class BudgetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    category: str
+    monthly_limit: float
+    spent: float = 0.0
+
+
+# ---------- Trend ----------
+class TrendPoint(BaseModel):
+    period: str
+    total_income: float
+    total_expense: float
+
+
 # ---------- Dashboard ----------
 class DashboardOut(BaseModel):
     period: str

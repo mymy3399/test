@@ -15,8 +15,12 @@ Or via Docker: `docker compose up --build`.
 
 ## Architecture
 
-- **Backend** (`backend/`): FastAPI + SQLAlchemy 2.0 async ORM + SQLite (`sqlite+aiosqlite`, switchable to Postgres via `DATABASE_URL`). One router file per resource under `backend/routers/`, each mounted under `/api` in `main.py`. JWT auth (`backend/auth.py`) mirrors a standard OAuth2-password-bearer flow; `get_current_user` is a FastAPI dependency used on every protected route.
-- **Frontend** (`frontend/`): no-build vanilla JS static app, served directly by FastAPI (`StaticFiles` mounted at `/` in `main.py`). `api.js` is a fetch wrapper that attaches the JWT bearer token and exposes namespaced call groups (`auth`, `transactions`, `creditCards`, `recurringBills`, `loans`, `dashboard`). `app.js` owns a module-level `state` object, renders pages by fully rebuilding `#pageContent.innerHTML`, and wires interactions through event delegation on `data-action`/`data-id` attributes.
+- **Backend** (`backend/`): FastAPI + SQLAlchemy 2.0 async ORM + SQLite (`sqlite+aiosqlite`, switchable to Postgres via `DATABASE_URL`). One router file per resource under `backend/routers/`, each mounted under `/api` in `main.py`. JWT auth (`backend/auth.py`, PyJWT + bcrypt) mirrors a standard OAuth2-password-bearer flow; `get_current_user` is a FastAPI dependency used on every protected route. `main.py`'s `lifespan` also starts an `AsyncIOScheduler` (APScheduler) that runs `push_service.check_and_notify_due_bills` once a day at `settings.BILL_REMINDER_HOUR`.
+- **Frontend** (`frontend/`): no-build vanilla JS static app, served directly by FastAPI (`StaticFiles` mounted at `/` in `main.py`). `api.js` is a fetch wrapper that attaches the JWT bearer token and exposes namespaced call groups (`auth`, `transactions`, `creditCards`, `recurringBills`, `loans`, `dashboard`, `budgets`, `push`). `app.js` owns a module-level `state` object, renders pages by fully rebuilding `#pageContent.innerHTML`, and wires interactions through event delegation on `data-action`/`data-id` attributes. `sw.js` is a minimal service worker (push + notificationclick only) registered on boot; `manifest.json` + `frontend/icons/` make the app installable as a PWA.
+
+### PIN lock is a client-side privacy screen, not encryption
+
+`hasPinSet()`/`verifyPin()` in `app.js` hash a PIN with `crypto.subtle.digest('SHA-256', ...)` and store it in `localStorage` under `expense-pin-hash-v1`. This only gates the UI on that device/browser — clearing site storage bypasses it, and it never touches the backend. Don't confuse it with real auth; it exists so a phone left unattended doesn't show the balance at a glance.
 
 ### Important: click handlers use `.onclick =`, not `addEventListener`
 

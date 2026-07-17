@@ -114,6 +114,28 @@ class Loan(Base):
     )
 
 
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    endpoint: Mapped[str] = mapped_column(unique=True)
+    p256dh: Mapped[str]
+    auth: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class Budget(Base):
+    __tablename__ = "budgets"
+    __table_args__ = (UniqueConstraint("user_id", "category", name="uq_budget_user_category"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    category: Mapped[str]
+    monthly_limit: Mapped[float]
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
 class LoanPayment(Base):
     __tablename__ = "loan_payments"
 

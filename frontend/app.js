@@ -18,7 +18,12 @@ const state = {
   page: "dashboard",
   creditCards: [],
   categoriesCache: {},
+  appLoaded: false,
 };
+
+const PIN_KEY = "expense-pin-hash-v1";
+const LOCK_AFTER_MS = 5 * 60 * 1000;
+let hiddenAt = null;
 
 function esc(v) {
   if (v === null || v === undefined) return "";
@@ -77,21 +82,219 @@ function toggleTheme() {
   localStorage.setItem(THEME_KEY, next);
 }
 
+// ---------------- PIN lock (device-local privacy screen) ----------------
+// NOTE: this only gates the UI on this device/browser — it is not encryption
+// and does not protect the data itself (clearing site storage bypasses it).
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function hasPinSet() {
+  return !!localStorage.getItem(PIN_KEY);
+}
+
+async function verifyPin(pin) {
+  return (await sha256Hex(pin)) === localStorage.getItem(PIN_KEY);
+}
+
+function showLockScreen() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("app").classList.remove("visible");
+  const lockScreen = document.getElementById("lockScreen");
+  lockScreen.style.display = "flex";
+  document.getElementById("pinUnlockError").textContent = "";
+  const input = document.getElementById("pinUnlockInput");
+  input.value = "";
+  setTimeout(() => input.focus(), 50);
+}
+
+async function onPinUnlockSubmit(e) {
+  e.preventDefault();
+  const pin = document.getElementById("pinUnlockInput").value;
+  const errorEl = document.getElementById("pinUnlockError");
+  if (await verifyPin(pin)) {
+    document.getElementById("lockScreen").style.display = "none";
+    if (!state.appLoaded) {
+      await showApp();
+    } else {
+      document.getElementById("app").classList.add("visible");
+    }
+  } else {
+    errorEl.textContent = "รหัส PIN ไม่ถูกต้อง";
+  }
+}
+
+function setupVisibilityLock() {
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      hiddenAt = Date.now();
+    } else if (hasPinSet() && hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) {
+      showLockScreen();
+    }
+  });
+}
+
+function openPinSettingsModal() {
+  const isSet = hasPinSet();
+  openModal(`
+    <h3>${isSet ? "จัดการรหัส PIN" : "ตั้งรหัส PIN ล็อกหน้าจอ"}</h3>
+    <p style="color:var(--text-dim);font-size:0.8rem;">
+      รหัส PIN นี้ล็อกหน้าจอแอปบนอุปกรณ์นี้เท่านั้น ไม่ได้เข้ารหัสข้อมูล — ถ้าลืมรหัสให้ล้างข้อมูลเว็บไซต์ของเบราว์เซอร์เพื่อรีเซ็ต
+    </p>
+    <form id="pinSettingsForm">
+      ${isSet ? `
+      <div class="field">
+        <label>รหัส PIN ปัจจุบัน</label>
+        <input id="pinCurrent" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
+      </div>` : ""}
+      <div class="field">
+        <label>รหัส PIN ใหม่ (4-6 หลัก)${isSet ? " — เว้นว่างเพื่อลบรหัส PIN" : ""}</label>
+        <input id="pinNew" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" ${isSet ? "" : "required"} />
+      </div>
+      <div class="field">
+        <label>ยืนยันรหัส PIN ใหม่</label>
+        <input id="pinConfirm" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" ${isSet ? "" : "required"} />
+      </div>
+      <div class="form-error" id="pinSettingsError"></div>
+      <div class="modal-footer">
+        <button type="button" class="ghost" data-action="close-modal">ยกเลิก</button>
+        <button type="submit" class="primary">บันทึก</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("modalHost").onclick = (e) => {
+    if (e.target.closest('[data-action="close-modal"]')) closeModal();
+  };
+  document.getElementById("pinSettingsForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("pinSettingsError");
+    if (isSet) {
+      const current = document.getElementById("pinCurrent").value;
+      if (!(await verifyPin(current))) {
+        errorEl.textContent = "รหัส PIN ปัจจุบันไม่ถูกต้อง";
+        return;
+      }
+    }
+    const pinNew = document.getElementById("pinNew").value;
+    const pinConfirm = document.getElementById("pinConfirm").value;
+    if (!pinNew) {
+      localStorage.removeItem(PIN_KEY);
+      toast("ปิดการล็อกด้วย PIN แล้ว", "info");
+      closeModal();
+      return;
+    }
+    if (!/^[0-9]{4,6}$/.test(pinNew)) {
+      errorEl.textContent = "รหัส PIN ต้องเป็นตัวเลข 4-6 หลัก";
+      return;
+    }
+    if (pinNew !== pinConfirm) {
+      errorEl.textContent = "รหัส PIN ยืนยันไม่ตรงกัน";
+      return;
+    }
+    localStorage.setItem(PIN_KEY, await sha256Hex(pinNew));
+    toast("ตั้งรหัส PIN แล้ว", "success");
+    closeModal();
+  });
+}
+
+// ---------------- Push notifications ----------------
+async function registerServiceWorkerIfSupported() {
+  if (!("serviceWorker" in navigator)) return null;
+  try {
+    return await navigator.serviceWorker.register("sw.js");
+  } catch (_) {
+    return null;
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function updateNotifyButton() {
+  const btn = document.getElementById("notifyToggleBtn");
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    btn.style.display = "none";
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    btn.innerHTML = sub
+      ? '🔕<span class="btn-label"> ปิดแจ้งเตือน</span>'
+      : '🔔<span class="btn-label"> แจ้งเตือน</span>';
+    btn.title = sub ? "ปิดการแจ้งเตือน" : "เปิดการแจ้งเตือน";
+  } catch (_) {
+    /* leave default */
+  }
+}
+
+async function onNotifyToggle() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    toast("อุปกรณ์นี้ไม่รองรับการแจ้งเตือนแบบ push", "warning");
+    return;
+  }
+  const reg = await navigator.serviceWorker.ready;
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) {
+    try {
+      await api.push.unsubscribe(existing.endpoint);
+    } catch (_) {}
+    await existing.unsubscribe();
+    toast("ปิดการแจ้งเตือนแล้ว", "info");
+    await updateNotifyButton();
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    toast("ไม่ได้รับอนุญาตให้แจ้งเตือน", "warning");
+    return;
+  }
+
+  try {
+    const { key } = await api.push.vapidPublicKey();
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key),
+    });
+    const subJson = sub.toJSON();
+    await api.push.subscribe({ endpoint: subJson.endpoint, keys: subJson.keys });
+    toast("เปิดการแจ้งเตือนแล้ว 🔔 จะเตือนก่อนถึงกำหนดจ่ายรายจ่ายประจำ", "success");
+  } catch (err) {
+    toast("เปิดการแจ้งเตือนไม่สำเร็จ: " + err.message, "error");
+  }
+  await updateNotifyButton();
+}
+
 // ---------------- Auth / boot ----------------
 async function boot() {
   initTheme();
   document.getElementById("loginForm").addEventListener("submit", onLoginSubmit);
+  document.getElementById("pinUnlockForm").addEventListener("submit", onPinUnlockSubmit);
   document.getElementById("logoutBtn").addEventListener("click", onLogout);
   document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme);
+  document.getElementById("pinLockBtn").addEventListener("click", openPinSettingsModal);
+  document.getElementById("notifyToggleBtn").addEventListener("click", onNotifyToggle);
   document.getElementById("sideNav").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-page]");
     if (btn) navigate(btn.dataset.page);
   });
+  registerServiceWorkerIfSupported();
+  setupVisibilityLock();
 
   if (api.getToken()) {
     try {
       state.user = await api.auth.me();
-      showApp();
+      if (hasPinSet()) {
+        showLockScreen();
+      } else {
+        await showApp();
+      }
       return;
     } catch (_) {
       // fall through to login
@@ -114,6 +317,8 @@ async function showApp() {
   } catch (_) {
     state.creditCards = [];
   }
+  state.appLoaded = true;
+  updateNotifyButton();
   await navigate("dashboard");
 }
 
@@ -149,6 +354,7 @@ async function navigate(page) {
     else if (page === "recurring") await renderRecurring();
     else if (page === "creditCards") await renderCreditCards();
     else if (page === "loans") await renderLoans();
+    else if (page === "budgets") await renderBudgets();
   } catch (err) {
     content.innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: ${esc(err.message)}</div>`;
   }
@@ -164,6 +370,34 @@ function creditCardOptions(selectedId) {
 }
 
 // ================= Dashboard =================
+function monthShortLabel(period) {
+  const [y, m] = period.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("th-TH", { month: "short" });
+}
+
+function renderTrendChart(trend) {
+  if (!trend.length) return "";
+  const max = Math.max(1, ...trend.flatMap((t) => [t.total_income, t.total_expense]));
+  return `
+    <div class="panel">
+      <h3>แนวโน้มรายรับ-รายจ่าย ${trend.length} เดือนล่าสุด</h3>
+      <div class="trend-legend">
+        <span><i class="dot income"></i>รายรับ</span>
+        <span><i class="dot expense"></i>รายจ่าย</span>
+      </div>
+      <div class="trend-chart">
+        ${trend.map((t) => `
+          <div class="trend-col">
+            <div class="trend-bars">
+              <div class="trend-bar income" style="height:${(t.total_income / max) * 100}%" title="รายรับ ${esc(t.period)}: ฿${fmtMoney(t.total_income)}"></div>
+              <div class="trend-bar expense" style="height:${(t.total_expense / max) * 100}%" title="รายจ่าย ${esc(t.period)}: ฿${fmtMoney(t.total_expense)}"></div>
+            </div>
+            <div class="trend-label">${esc(monthShortLabel(t.period))}</div>
+          </div>`).join("")}
+      </div>
+    </div>`;
+}
+
 function renderCategoryBars(byCategory) {
   const entries = Object.entries(byCategory || {}).sort((a, b) => b[1] - a[1]);
   if (!entries.length) return "";
@@ -184,10 +418,11 @@ function renderCategoryBars(byCategory) {
 
 async function renderDashboard() {
   await api.recurringBills.generate();
-  const [summary, pendingInstances, txnSummary] = await Promise.all([
+  const [summary, pendingInstances, txnSummary, trend] = await Promise.all([
     api.dashboard.summary(),
     api.recurringBills.instances("pending"),
     api.transactions.summary(),
+    api.transactions.trend(6),
   ]);
 
   const content = document.getElementById("pageContent");
@@ -202,6 +437,7 @@ async function renderDashboard() {
       <div class="kpi-card"><div class="label">ยอดลูกหนี้คงค้าง</div><div class="value">฿${fmtMoney(summary.loans_outstanding)}</div></div>
     </div>
 
+    ${renderTrendChart(trend)}
     ${renderCategoryBars(txnSummary.by_category)}
 
     ${pendingInstances.length ? `
@@ -282,24 +518,81 @@ function renderTxnTable(txns, withActions = true) {
 }
 
 // ================= Transactions =================
-let txnFilter = { type: "" };
+let txnFilter = { type: "", q: "", date_from: "", date_to: "" };
+let txnSearchFocused = false;
+
+function debounce(fn, delay) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
+function buildTxnParams() {
+  const params = {};
+  if (txnFilter.type) params.type = txnFilter.type;
+  if (txnFilter.q) params.q = txnFilter.q;
+  if (txnFilter.date_from) params.date_from = txnFilter.date_from;
+  if (txnFilter.date_to) params.date_to = txnFilter.date_to;
+  return params;
+}
 
 async function renderTransactions() {
-  const txns = await api.transactions.list(txnFilter.type ? { type: txnFilter.type } : {});
+  const txns = await api.transactions.list(buildTxnParams());
   const content = document.getElementById("pageContent");
   content.innerHTML = `
     <div class="main-header">
       <h2>รายรับ-รายจ่าย</h2>
-      <button class="primary" data-action="add-txn">+ เพิ่มรายการ</button>
+      <div class="actions-cell">
+        <button data-action="export-csv">⬇ CSV</button>
+        <button class="primary" data-action="add-txn">+ เพิ่มรายการ</button>
+      </div>
     </div>
     <div class="tag-row">
       <button data-filter="" class="${txnFilter.type === "" ? "active" : ""}">ทั้งหมด</button>
       <button data-filter="income" class="${txnFilter.type === "income" ? "active" : ""}">รายรับ</button>
       <button data-filter="expense" class="${txnFilter.type === "expense" ? "active" : ""}">รายจ่าย</button>
     </div>
+    <div class="panel">
+      <div class="field-row">
+        <div class="field">
+          <label>ค้นหา</label>
+          <input id="txnSearchInput" value="${esc(txnFilter.q)}" placeholder="ค้นหาหมวดหมู่ / รายละเอียด" />
+        </div>
+        <div class="field">
+          <label>จากวันที่</label>
+          <input id="txnDateFrom" type="date" value="${esc(txnFilter.date_from)}" />
+        </div>
+        <div class="field">
+          <label>ถึงวันที่</label>
+          <input id="txnDateTo" type="date" value="${esc(txnFilter.date_to)}" />
+        </div>
+      </div>
+    </div>
     <div class="panel">${renderTxnTable(txns, true)}</div>
   `;
   content.onclick = onTransactionsClick;
+
+  const searchInput = document.getElementById("txnSearchInput");
+  searchInput.addEventListener("input", debounce((e) => {
+    txnFilter.q = e.target.value;
+    renderTransactions();
+  }, 400));
+  searchInput.addEventListener("focus", () => { txnSearchFocused = true; });
+  searchInput.addEventListener("blur", () => { txnSearchFocused = false; });
+  if (txnSearchFocused) {
+    searchInput.focus();
+    searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+  }
+  document.getElementById("txnDateFrom").addEventListener("change", (e) => {
+    txnFilter.date_from = e.target.value;
+    renderTransactions();
+  });
+  document.getElementById("txnDateTo").addEventListener("change", (e) => {
+    txnFilter.date_to = e.target.value;
+    renderTransactions();
+  });
 }
 
 async function onTransactionsClick(e) {
@@ -311,6 +604,14 @@ async function onTransactionsClick(e) {
   }
   if (e.target.closest('[data-action="add-txn"]')) {
     openTxnModal();
+    return;
+  }
+  if (e.target.closest('[data-action="export-csv"]')) {
+    try {
+      await api.transactions.exportCsv(buildTxnParams());
+    } catch (err) {
+      toast(err.message, "error");
+    }
     return;
   }
   const editBtn = e.target.closest('[data-action="edit-txn"]');
@@ -991,6 +1292,110 @@ function openLoanPaymentModal(loan) {
       toast("บันทึกการรับชำระแล้ว", "success");
       closeModal();
       await renderLoans();
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
+}
+
+// ================= Budgets =================
+async function renderBudgets() {
+  const budgets = await api.budgets.list();
+  const content = document.getElementById("pageContent");
+  content.innerHTML = `
+    <div class="main-header">
+      <h2>งบประมาณรายเดือน</h2>
+      <button class="primary" data-action="add-budget">+ เพิ่มงบประมาณ</button>
+    </div>
+    <div class="panel">
+      ${budgets.length ? budgets.map(renderBudgetRow).join("") : `<div class="empty-state"><span class="empty-icon">🎯</span>ยังไม่มีงบประมาณ ตั้งวงเงินต่อหมวดหมู่เพื่อให้ระบบเตือนเมื่อใกล้เกินงบ</div>`}
+    </div>
+  `;
+  content.onclick = onBudgetsClick;
+}
+
+function renderBudgetRow(b) {
+  const pct = b.monthly_limit > 0 ? Math.min(100, (b.spent / b.monthly_limit) * 100) : 0;
+  const over = b.spent > b.monthly_limit;
+  const near = !over && pct >= 80;
+  const barColor = over ? "var(--danger)" : near ? "var(--warning)" : "var(--accent-2)";
+  return `
+    <div class="budget-row">
+      <div class="main-header" style="margin-bottom: 0.35rem;">
+        <div>
+          <strong>${esc(b.category)}</strong>
+          <div style="font-size: 0.8rem; color: var(--text-dim);">
+            ฿${fmtMoney(b.spent)} / ฿${fmtMoney(b.monthly_limit)}
+            ${over ? ' <span class="badge skipped" style="background:rgba(239,68,68,0.15);color:var(--danger);">เกินงบ</span>' : near ? ' <span class="badge pending">ใกล้ถึงงบ</span>' : ""}
+          </div>
+        </div>
+        <div class="actions-cell">
+          <button class="small" data-action="edit-budget" data-id="${b.id}">แก้ไข</button>
+          <button class="small danger" data-action="delete-budget" data-id="${b.id}">ลบ</button>
+        </div>
+      </div>
+      <div class="progress-bar"><div style="width:${pct}%;background:${barColor}"></div></div>
+    </div>`;
+}
+
+async function onBudgetsClick(e) {
+  if (e.target.closest('[data-action="add-budget"]')) return openBudgetModal();
+
+  const editBtn = e.target.closest('[data-action="edit-budget"]');
+  if (editBtn) {
+    const budgets = await api.budgets.list();
+    return openBudgetModal(budgets.find((b) => String(b.id) === editBtn.dataset.id));
+  }
+
+  const delBtn = e.target.closest('[data-action="delete-budget"]');
+  if (delBtn) {
+    if (!confirm("ลบงบประมาณนี้หรือไม่?")) return;
+    try {
+      await api.budgets.remove(delBtn.dataset.id);
+      toast("ลบแล้ว", "success");
+      await renderBudgets();
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  }
+}
+
+function openBudgetModal(budget = null) {
+  const isEdit = !!budget;
+  openModal(`
+    <h3>${isEdit ? "แก้ไขงบประมาณ" : "เพิ่มงบประมาณ"}</h3>
+    <form id="budgetForm">
+      <div class="field">
+        <label>หมวดหมู่</label>
+        <input id="budgetCategory" list="budgetCategoryOptions" value="${esc(budget ? budget.category : "")}" required />
+        <datalist id="budgetCategoryOptions">${EXPENSE_CATEGORIES.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
+      </div>
+      <div class="field">
+        <label>วงเงินต่อเดือน</label>
+        <input id="budgetLimit" type="number" step="0.01" min="0.01" value="${budget ? budget.monthly_limit : ""}" required />
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="ghost" data-action="close-modal">ยกเลิก</button>
+        <button type="submit" class="primary">บันทึก</button>
+      </div>
+    </form>
+  `);
+
+  document.getElementById("modalHost").onclick = (e) => {
+    if (e.target.closest('[data-action="close-modal"]')) closeModal();
+  };
+  document.getElementById("budgetForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      category: document.getElementById("budgetCategory").value.trim(),
+      monthly_limit: parseFloat(document.getElementById("budgetLimit").value),
+    };
+    try {
+      if (isEdit) await api.budgets.update(budget.id, payload);
+      else await api.budgets.create(payload);
+      toast("บันทึกสำเร็จ", "success");
+      closeModal();
+      await renderBudgets();
     } catch (err) {
       toast(err.message, "error");
     }

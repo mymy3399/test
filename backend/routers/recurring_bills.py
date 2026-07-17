@@ -1,4 +1,3 @@
-import calendar
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import get_current_user
 from ..database import get_db
 from ..models import RecurringBill, RecurringBillInstance, Transaction, User
+from ..recurring_utils import due_date_for
 from ..schemas import (
     RecurringBillCreate,
     RecurringBillInstanceOut,
@@ -74,11 +74,6 @@ async def delete_bill(
     return {"ok": True}
 
 
-def _due_date_for(year: int, month: int, due_day: int) -> date:
-    last_day = calendar.monthrange(year, month)[1]
-    return date(year, month, min(due_day, last_day))
-
-
 @router.post("/generate", response_model=list[RecurringBillInstanceOut])
 async def generate_due_instances(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Create pending instances for active bills whose due date has arrived this period."""
@@ -92,7 +87,7 @@ async def generate_due_instances(db: AsyncSession = Depends(get_db), user: User 
 
     created: list[RecurringBillInstance] = []
     for bill in bills:
-        due_date = _due_date_for(today.year, today.month, bill.due_day)
+        due_date = due_date_for(today.year, today.month, bill.due_day)
         if due_date > today:
             continue
         existing = await db.execute(

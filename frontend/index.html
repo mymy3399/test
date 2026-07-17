@@ -55,15 +55,35 @@
       <button data-page="loans">
         <span class="nav-icon">🤝</span><span class="nav-label">ยืมเงิน/ลูกหนี้</span>
       </button>
+      <button data-page="budgets">
+        <span class="nav-icon">🎯</span><span class="nav-label">งบประมาณ</span>
+      </button>
     </nav>
     <div class="user-box">
       <div id="currentUserLabel">—</div>
+      <button id="notifyToggleBtn" class="small icon-btn" title="เปิดการแจ้งเตือน">🔔<span class="btn-label"> แจ้งเตือน</span></button>
+      <button id="pinLockBtn" class="small icon-btn" title="ตั้งรหัส PIN">🔒<span class="btn-label"> ตั้งรหัส PIN</span></button>
       <button id="themeToggleBtn" class="theme-toggle small icon-btn" title="สลับธีม">🌙<span class="btn-label"> / ☀️ ธีม</span></button>
       <button id="logoutBtn" class="small icon-btn" title="ออกจากระบบ">🚪<span class="btn-label"> ออกจากระบบ</span></button>
     </div>
   </aside>
 
   <main class="main"><div id="pageContent"></div></main>
+</div>
+
+<div id="lockScreen" style="display:none">
+  <div class="login-card">
+    <h1>🔒 ล็อกอยู่</h1>
+    <p class="subtitle">ใส่รหัส PIN เพื่อเข้าใช้งาน</p>
+    <form id="pinUnlockForm">
+      <div class="field">
+        <label for="pinUnlockInput">รหัส PIN</label>
+        <input id="pinUnlockInput" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" required />
+      </div>
+      <div class="form-error" id="pinUnlockError"></div>
+      <button type="submit" class="primary">ปลดล็อก</button>
+    </form>
+  </div>
 </div>
 
 <div id="toastHost"></div>
