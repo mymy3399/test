@@ -6,7 +6,7 @@ from ..auth import get_current_user
 from ..config import settings
 from ..database import get_db
 from ..models import PushSubscription, User
-from ..push_service import check_and_notify_due_bills, send_push_to_user
+from ..push_service import check_and_notify_due_bills, check_and_notify_due_loans, send_push_to_user
 from ..schemas import PushSubscriptionCreate
 
 router = APIRouter(prefix="/push", tags=["push"])
@@ -71,6 +71,7 @@ async def send_test_push(db: AsyncSession = Depends(get_db), user: User = Depend
 
 @router.post("/check-now")
 async def trigger_due_check(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    """Manually trigger the daily due-bill reminder sweep (normally runs on a schedule)."""
-    sent = await check_and_notify_due_bills(db)
-    return {"sent": sent}
+    """Manually trigger the daily due-bill/loan reminder sweep (normally runs on a schedule)."""
+    sent_bills = await check_and_notify_due_bills(db)
+    sent_loans = await check_and_notify_due_loans(db)
+    return {"sent": sent_bills + sent_loans, "sent_bills": sent_bills, "sent_loans": sent_loans}

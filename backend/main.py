@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .database import init_db, SessionLocal
-from .push_service import check_and_notify_due_bills
+from .push_service import check_and_notify_due_bills, check_and_notify_due_loans
 from .seed import seed_if_empty
 from .routers import auth, transactions, recurring_bills, credit_cards, loans, dashboard, push, budgets
 
@@ -19,9 +19,14 @@ logger = logging.getLogger(__name__)
 
 async def _run_due_bill_check() -> None:
     async with SessionLocal() as db:
-        sent = await check_and_notify_due_bills(db)
-        if sent:
-            logger.info("due-bill reminder sweep sent %d push notification(s)", sent)
+        sent_bills = await check_and_notify_due_bills(db)
+        sent_loans = await check_and_notify_due_loans(db)
+        total = sent_bills + sent_loans
+        if total:
+            logger.info(
+                "reminder sweep sent %d push notification(s) (%d bills, %d loans)",
+                total, sent_bills, sent_loans,
+            )
 
 
 @asynccontextmanager

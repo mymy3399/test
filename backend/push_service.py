@@ -3,11 +3,11 @@ import logging
 from datetime import date, timedelta
 
 from pywebpush import WebPushException, webpush
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
-from .models import PushSubscription, RecurringBill, RecurringBillInstance
+from .models import Loan, LoanPayment, PushSubscription, RecurringBill, RecurringBillInstance
 from .recurring_utils import due_date_for
 
 logger = logging.getLogger(__name__)
@@ -74,6 +74,53 @@ async def check_and_notify_due_bills(db: AsyncSession) -> int:
             bill.user_id,
             title="รายจ่ายประจำใกล้ถึงกำหนด",
             body=f"{bill.name} ฿{bill.amount:,.2f} ครบกำหนดชำระ{when}",
+            url="/",
+        )
+        sent += 1
+
+    return sent
+
+
+async def check_and_notify_due_loans(db: AsyncSession) -> int:
+    """Send a reminder push for every active loan installment (monthly or
+    product installment, with a due_day set) due today or tomorrow that
+    hasn't already had a payment recorded for the current period. Meant to
+    be called once a day by the scheduler, alongside check_and_notify_due_bills."""
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    period = today.strftime("%Y-%m")
+
+    result = await db.execute(
+        select(Loan).where(
+            Loan.status == "active",
+            Loan.repayment_type.in_(["monthly_installment", "product_installment"]),
+            Loan.due_day.isnot(None),
+        )
+    )
+    loans = result.scalars().all()
+
+    sent = 0
+    for loan in loans:
+        due = due_date_for(today.year, today.month, loan.due_day)
+        if due not in (today, tomorrow):
+            continue
+
+        existing_payment = await db.execute(
+            select(LoanPayment).where(
+                LoanPayment.loan_id == loan.id,
+                func.strftime("%Y-%m", LoanPayment.payment_date) == period,
+            )
+        )
+        if existing_payment.scalar_one_or_none() is not None:
+            continue
+
+        when = "วันนี้" if due == today else "พรุ่งนี้"
+        amount = loan.installment_amount or loan.principal_amount
+        await send_push_to_user(
+            db,
+            loan.user_id,
+            title="ใกล้ถึงกำหนดรับชำระหนี้",
+            body=f"{loan.borrower_name} ครบกำหนดผ่อน ฿{amount:,.2f} {when}",
             url="/",
         )
         sent += 1
