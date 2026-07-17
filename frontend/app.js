@@ -370,6 +370,17 @@ function creditCardOptions(selectedId) {
 }
 
 // ================= Dashboard =================
+function kpiCard(icon, label, value, valueClass = "") {
+  return `
+    <div class="kpi-card">
+      <div class="kpi-icon ${valueClass}">${icon}</div>
+      <div>
+        <div class="label">${esc(label)}</div>
+        <div class="value ${valueClass}">${value}</div>
+      </div>
+    </div>`;
+}
+
 function monthShortLabel(period) {
   const [y, m] = period.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString("th-TH", { month: "short" });
@@ -429,12 +440,12 @@ async function renderDashboard() {
   content.innerHTML = `
     <div class="main-header"><h2>ภาพรวมเดือน ${esc(summary.period)}</h2></div>
     <div class="kpi-grid">
-      <div class="kpi-card"><div class="label">รายรับเดือนนี้</div><div class="value positive">฿${fmtMoney(summary.total_income)}</div></div>
-      <div class="kpi-card"><div class="label">รายจ่ายเดือนนี้</div><div class="value negative">฿${fmtMoney(summary.total_expense)}</div></div>
-      <div class="kpi-card"><div class="label">คงเหลือ</div><div class="value ${summary.balance >= 0 ? "positive" : "negative"}">฿${fmtMoney(summary.balance)}</div></div>
-      <div class="kpi-card"><div class="label">รายจ่ายประจำรอชำระ</div><div class="value warning">${summary.pending_bills_count} รายการ (฿${fmtMoney(summary.pending_bills_amount)})</div></div>
-      <div class="kpi-card"><div class="label">ยอดบัตรเครดิตเดือนนี้</div><div class="value">฿${fmtMoney(summary.credit_card_outstanding)}</div></div>
-      <div class="kpi-card"><div class="label">ยอดลูกหนี้คงค้าง</div><div class="value">฿${fmtMoney(summary.loans_outstanding)}</div></div>
+      ${kpiCard("💰", "รายรับเดือนนี้", `฿${fmtMoney(summary.total_income)}`, "positive")}
+      ${kpiCard("💸", "รายจ่ายเดือนนี้", `฿${fmtMoney(summary.total_expense)}`, "negative")}
+      ${kpiCard("🧮", "คงเหลือ", `฿${fmtMoney(summary.balance)}`, summary.balance >= 0 ? "positive" : "negative")}
+      ${kpiCard("⏰", "รายจ่ายประจำรอชำระ", `${summary.pending_bills_count} รายการ (฿${fmtMoney(summary.pending_bills_amount)})`, "warning")}
+      ${kpiCard("💳", "ยอดบัตรเครดิตเดือนนี้", `฿${fmtMoney(summary.credit_card_outstanding)}`, "")}
+      ${kpiCard("🤝", "ยอดลูกหนี้คงค้าง", `฿${fmtMoney(summary.loans_outstanding)}`, "")}
     </div>
 
     ${renderTrendChart(trend)}
@@ -1082,8 +1093,8 @@ async function renderLoans() {
       <button class="primary" data-action="add-loan">+ บันทึกการให้ยืมเงิน</button>
     </div>
     <div class="kpi-grid">
-      <div class="kpi-card"><div class="label">ลูกหนี้ที่ยังค้างอยู่</div><div class="value">${activeLoans.length} ราย</div></div>
-      <div class="kpi-card"><div class="label">ยอดคงค้างรวม</div><div class="value warning">฿${fmtMoney(totalOutstanding)}</div></div>
+      ${kpiCard("🧑‍🤝‍🧑", "ลูกหนี้ที่ยังค้างอยู่", `${activeLoans.length} ราย`, "")}
+      ${kpiCard("⚠️", "ยอดคงค้างรวม", `฿${fmtMoney(totalOutstanding)}`, "warning")}
     </div>
 
     <div class="panel">
@@ -1326,7 +1337,7 @@ function renderBudgetRow(b) {
           <strong>${esc(b.category)}</strong>
           <div style="font-size: 0.8rem; color: var(--text-dim);">
             ฿${fmtMoney(b.spent)} / ฿${fmtMoney(b.monthly_limit)}
-            ${over ? ' <span class="badge skipped" style="background:rgba(239,68,68,0.15);color:var(--danger);">เกินงบ</span>' : near ? ' <span class="badge pending">ใกล้ถึงงบ</span>' : ""}
+            ${over ? ' <span class="badge over">เกินงบ</span>' : near ? ' <span class="badge pending">ใกล้ถึงงบ</span>' : ""}
           </div>
         </div>
         <div class="actions-cell">
